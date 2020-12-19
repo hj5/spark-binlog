@@ -10,11 +10,11 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hbase.client.{Delete, Put}
 import org.apache.hadoop.hbase.wal.{WAL, WALEdit, WALFactory}
 import org.apache.hadoop.hbase.{Cell, CellUtil}
+import org.apache.spark.sql.binlog.common.HDFSContext
 import org.apache.spark.sql.execution.streaming.LongOffset
 import org.apache.spark.sql.sources.v2.reader.streaming.Offset
 import org.apache.spark.streaming.RawEvent
 import org.spark_project.guava.cache.{CacheBuilder, CacheLoader, LoadingCache}
-import tech.mlsql.binlog.common.HDFSContext
 import tech.mlsql.common.utils.log.Logging
 
 import scala.collection.JavaConverters._

@@ -7,10 +7,10 @@ import java.util.regex.Pattern
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkEnv
+import org.apache.spark.sql.binlog.common.OriginalSourceServerInExecutor
 import org.apache.spark.sql.execution.streaming.{LongOffset, Offset}
 import org.apache.spark.sql.mlsql.sources.hbase.wal.io.{DeleteWriter, PutWriter}
 import org.apache.spark.streaming.RawEvent
-import tech.mlsql.binlog.common.OriginalSourceServerInExecutor
 import tech.mlsql.common.utils.distribute.socket.server.SocketIteratorMark
 import tech.mlsql.common.utils.network.NetUtils
 

@@ -11,6 +11,7 @@ import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.binlog.common.{BinlogConsumer, CommonOffsetRange, CommonPartition, CommonSourceOffset, ConsumerCache, OriginalSourceServerInExecutor}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming._
 import org.apache.spark.sql.mlsql.sources.hbase.wal._
@@ -18,7 +19,6 @@ import org.apache.spark.sql.sources.{DataSourceRegister, StreamSourceProvider}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, LaunchSourceConsumerAndProducer, SQLContext, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
-import tech.mlsql.binlog.common._
 import tech.mlsql.common.utils.distribute.socket.server.ReportHostAndPort
 
 /**

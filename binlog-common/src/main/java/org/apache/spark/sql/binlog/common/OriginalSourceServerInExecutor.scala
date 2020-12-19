@@ -1,4 +1,4 @@
-package tech.mlsql.binlog.common
+package org.apache.spark.sql.binlog.common
 
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket

@@ -1,4 +1,4 @@
-package tech.mlsql.binlog.common
+package org.apache.spark.sql.binlog.common
 
 import org.apache.spark.{SparkEnv, SparkException}
 import tech.mlsql.common.utils.distribute.socket.server.ReportHostAndPort

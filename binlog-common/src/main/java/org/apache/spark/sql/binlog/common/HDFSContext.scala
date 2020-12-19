@@ -1,4 +1,4 @@
-package tech.mlsql.binlog.common
+package org.apache.spark.sql.binlog.common
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileContext, Path}

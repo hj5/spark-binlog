@@ -5,9 +5,9 @@ import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.spark.sql.binlog.common.OriginalSourceServerInExecutor
 import org.apache.spark.util.{SerializableConfiguration, TaskCompletionListener, TaskFailureListener}
 import org.apache.spark.{SparkEnv, TaskContext}
-import tech.mlsql.binlog.common.OriginalSourceServerInExecutor
 import tech.mlsql.common.utils.distribute.socket.server.{ReportHostAndPort, ReportSingleAction, SocketServerSerDer, TempSocketServerInDriver}
 import tech.mlsql.common.utils.network.NetUtils
 
@@ -22,7 +22,6 @@ class LaunchSourceConsumerAndProducer(spark: SparkSession) {
     val conf = spark.sessionState.newHadoopConf()
     val confBr = spark.sparkContext.broadcast(new SerializableConfiguration(conf))
 
-    val timezoneID = spark.sessionState.conf.sessionLocalTimeZone
     val checkPointDir = metadataPath.stripSuffix("/").split("/").
       dropRight(2).mkString("/")
 

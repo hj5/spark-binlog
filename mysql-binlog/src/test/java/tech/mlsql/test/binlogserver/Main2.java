@@ -10,11 +10,16 @@ import java.util.BitSet;
 public class Main2 {
     public static void main(String[] args) {
         BitSet bs = new BitSet();
-        bs.set(1);
+        bs.set(0);
+        bs.set(8);
+        bs.set(71);
         long bsLong = byteArrayToLong(bs.toByteArray());
         BitSet bs2 = BitSet.valueOf(Longs.toByteArray(Long.reverseBytes(bsLong)));
         System.out.println(bs2.get(1));
         System.out.println(bs2.get(0));
+        System.out.println(bs2.get(8));
+        System.out.println(bs2.get(71));
+        System.out.println(bs.get(71));
     }
 
 

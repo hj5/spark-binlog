@@ -1,7 +1,6 @@
-package tech.mlsql.binlog.common
+package org.apache.spark.sql.binlog.common
 
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
-import org.apache.spark.sql.sources.v2.reader.streaming.{Offset => OffsetV2}
 import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
 
@@ -11,7 +10,7 @@ import scala.util.control.NonFatal
 /**
  * 11/12/2019 WilliamZhu(allwefantasy@gmail.com)
  */
-case class CommonSourceOffset(partitionToOffsets: Map[CommonPartition, Long]) extends OffsetV2 {
+case class CommonSourceOffset(partitionToOffsets: Map[CommonPartition, Long]) extends Offset {
 
   override val json = CommonSourceOffset.partitionOffsets(partitionToOffsets)
 

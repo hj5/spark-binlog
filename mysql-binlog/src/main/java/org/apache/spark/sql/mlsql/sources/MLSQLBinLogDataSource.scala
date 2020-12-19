@@ -5,7 +5,7 @@ import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.sql.ResultSet
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-import java.util.{Locale, UUID}
+import java.util.{Locale, TimeZone, UUID}
 
 import com.github.shyiko.mysql.binlog.network.ServerException
 import org.apache.commons.io.IOUtils
@@ -54,7 +54,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
   override def createSource(sqlContext: SQLContext, metadataPath: String, schema: Option[StructType], providerName: String, parameters: Map[String, String]): Source = {
 
     val spark = sqlContext.sparkSession
-    val timezoneID = spark.sessionState.conf.sessionLocalTimeZone
+    val timezoneID = TimeZone.getDefault.getID
 
     val bingLogHost = parameters("host")
     val bingLogPort = parameters("port").toInt
@@ -160,7 +160,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
 
     val broadcastedHadoopConf = new SerializableConfiguration(hadoopConfig)
 
-    val binaryLogClientParameters = CaseInsensitiveMap[String](parameters.filter(f => f._1.startsWith("binaryLogClient.".toLowerCase(Locale.ROOT))).
+    val binaryLogClientParameters = new CaseInsensitiveMap(parameters.filter(f => f._1.startsWith("binaryLogClient.".toLowerCase(Locale.ROOT))).
       map(f => (f._1.substring("binaryLogClient.".length), f._2)).toMap)
 
     def launchBinlogServer = {
@@ -377,7 +377,7 @@ case class MLSQLBinLogSource(executorBinlogServer: ExecutorBinlogServer,
 
     if (start.isDefined && start.get == end) {
       return spark.sqlContext.internalCreateDataFrame(
-        spark.sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
+        spark.sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema)
     }
 
     // once we have changed checkpoint path, then we can start from provided starting offset.
@@ -400,7 +400,7 @@ case class MLSQLBinLogSource(executorBinlogServer: ExecutorBinlogServer,
     }.map { cr =>
       InternalRow(UTF8String.fromString(cr))
     }
-    spark.sqlContext.internalCreateDataFrame(rdd.setName("mysql-bin-log"), schema, isStreaming = true)
+    spark.sqlContext.internalCreateDataFrame(rdd.setName("mysql-bin-log"), schema)
   }
 
   override def stop(): Unit = {
