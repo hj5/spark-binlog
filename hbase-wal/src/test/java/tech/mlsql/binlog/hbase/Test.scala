@@ -1,7 +1,7 @@
 package tech.mlsql.binlog.hbase
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.streaming.Trigger
+import org.apache.spark.sql.streaming.{ProcessingTime, Trigger}
 import org.scalatest.FunSuite
 
 /**
@@ -30,7 +30,7 @@ class Test extends FunSuite {
       option("numRows", "100000").
       option("checkpointLocation", "/tmp/cpl-binlog25").
       outputMode("append")
-      .trigger(Trigger.ProcessingTime("10 seconds"))
+      .trigger(ProcessingTime("10 seconds"))
       .start()
 
     query.awaitTermination()

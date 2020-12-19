@@ -201,7 +201,7 @@ case class MLSQLHBaseWAlSource(hostAndPort: ReportHostAndPort, spark: SparkSessi
 
     if (start.isDefined && start.get == end) {
       return spark.sqlContext.internalCreateDataFrame(
-        spark.sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
+        spark.sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema)
     }
 
     // once we have changed checkpoint path, then we can start from provided starting offset.
@@ -257,7 +257,7 @@ case class MLSQLHBaseWAlSource(hostAndPort: ReportHostAndPort, spark: SparkSessi
     }
   }
   rdd.setName("incremental-data")
-  spark.sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
+  spark.sqlContext.internalCreateDataFrame(rdd, schema)
 
 }
 

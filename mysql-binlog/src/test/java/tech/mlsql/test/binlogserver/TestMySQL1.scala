@@ -1,6 +1,7 @@
 package tech.mlsql.test.binlogserver
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.streaming.ProcessingTime
 import org.scalatest.FunSuite
 
 /**
@@ -49,7 +50,7 @@ class TestMySQL1 extends FunSuite {
       option("numRows", "100000").
       option("checkpointLocation", "/tmp/cpl-mysql6").
       outputMode("append")
-      .trigger(Trigger.ProcessingTime("3 seconds"))
+      .trigger(ProcessingTime("3 seconds"))
       .start()
 
     query.awaitTermination()

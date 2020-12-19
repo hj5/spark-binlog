@@ -7,7 +7,7 @@ import org.apache.commons.io.FileUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.mlsql.sources.mysql.binlog.MySQLConnection
 import org.apache.spark.sql.mlsql.sources.mysql.binlog.MySQLConnection.Callback
-import org.apache.spark.sql.streaming.Trigger
+import org.apache.spark.sql.streaming.{ProcessingTime, Trigger}
 import org.scalatest.FunSuite
 
 /**
@@ -98,7 +98,7 @@ class TestMySQL extends FunSuite {
       option("numRows", "100000").
       option("checkpointLocation", "/tmp/cpl-mysql6").
       outputMode("append")
-      .trigger(Trigger.ProcessingTime("10 seconds"))
+      .trigger(ProcessingTime("10 seconds"))
       .start()
 
     query.awaitTermination()
