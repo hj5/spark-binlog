@@ -11,7 +11,7 @@ class TestMySQL1 extends FunSuite {
 
   val tableName = "t1"
   test("mysql") {
-
+    System.setProperty("HADOOP_USER_NAME", "hdfs")
     val spark = SparkSession.builder()
       .master("local[*]")
       .appName("MySQL B Sync")
@@ -48,7 +48,7 @@ class TestMySQL1 extends FunSuite {
       option("mode", "Append").
       option("truncate", "false").
       option("numRows", "100000").
-      option("checkpointLocation", "/tmp/cpl-mysql6").
+//      option("checkpointLocation", "/tmp/cpl-mysql6").
       outputMode("append")
       .trigger(ProcessingTime("3 seconds"))
       .start()

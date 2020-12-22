@@ -8,8 +8,11 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.mlsql.sources.mysql.binlog.{BinLogSocketServerSerDer, ReportBinlogSocketServerHostAndPort, SocketServerInExecutor}
 
 /**
-  * 2019-06-16 WilliamZhu(allwefantasy@gmail.com)
-  */
+ * driver端启动的serverSocket线程：用于接收executor端启动binlogServer后的ip、port
+ * @author jian.huang
+ * @version 4.2
+ * 2020-12-21 21:24:32
+ */
 class TempSocketServerInDriver(context: AtomicReference[ReportBinlogSocketServerHostAndPort]) extends BinLogSocketServerSerDer with Logging {
   val (server, host, port) = SocketServerInExecutor.setupOneConnectionServer("driver-socket-server") { sock =>
     handleConnection(sock)

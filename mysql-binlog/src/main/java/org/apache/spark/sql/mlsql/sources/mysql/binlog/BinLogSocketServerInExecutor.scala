@@ -24,7 +24,12 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * 2019-06-13 WilliamZhu(allwefantasy@gmail.com)
+ * executor内部启动的binlogServer，作用如下：
+ * 1、接收mysql发送过来的binlog事件
+ * 2、作为socketServer端与client端（spark source接口方法）通信，提供source需要的offset、dataframe数据
+ * @author jian.huang
+ * @version 4.2
+ * 2020-12-22 17:18:38
  */
 class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
                                       checkpointDir: String,
@@ -41,7 +46,7 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
   private var currentBinlogFile: String = null
 
   private var currentBinlogPosition: Long = 4
-  private var currentBinlogPositionConsumeFlag: Boolean = false
+  @volatile private var currentBinlogPositionConsumeFlag: Boolean = false
   private var nextBinlogPosition: Long = 4
 
   private val queue = new util.ArrayDeque[RawBinlogEvent]()
@@ -120,12 +125,12 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
 
     if (isWriteAheadStorage) {
       aheadLogBuffer.offer(item)
-    }
-
-    if (!isWriteAheadStorage) {
+    } else {
+      //队列满了，就断开binlog conn，暂停接收事件：
       if (currentQueueSize.get() > maxBinlogQueueSize && !markPause.get()) {
         pause
       } else if (currentQueueSize.get() < maxBinlogQueueSize / 2 && markPause.get()) {
+        //队列足够大，获取binlog conn，重新接收事件：
         resume
       }
       currentQueueSize.incrementAndGet()
@@ -204,7 +209,10 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
       }
     })
 
-    //for now, we only care insert/update/delete three kinds of event
+    /**
+     * 接收原生mysql binlog事件，将其封装为RawBinlogEvent
+     * 目前只处理insert/update/delete事件
+     */
     binaryLogClient.registerEventListener(new BinaryLogClient.EventListener() {
       def onEvent(event: Event): Unit = {
         val header = event.getHeader[EventHeaderV4]()
@@ -250,6 +258,7 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
             }
 
           case ROTATE =>
+            //TODO：并发问题：保证二变量赋值的时候，没有对读二者
             val rotateEventData = event.getData[RotateEventData]()
             currentBinlogFile = rotateEventData.getBinlogFilename
             currentBinlogPosition = rotateEventData.getBinlogPosition
@@ -301,6 +310,11 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
 
   }
 
+  /**
+   * 根据内部封装的对象，获取事件对应的offset信息
+   * @param rawBinlogEvent
+   * @return
+   */
   private def toOffset(rawBinlogEvent: RawBinlogEvent) = {
     BinlogOffset.fromFileAndPos(rawBinlogEvent.getBinlogFilename, rawBinlogEvent.getPos).offset
   }

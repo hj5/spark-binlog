@@ -213,9 +213,9 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
         socket.close()
 
         SocketServerInExecutor.addNewBinlogServer(
-          MySQLBinlogServer(bingLogHost, bingLogPort),
+          MySQLBinlogServerInfo(bingLogHost, bingLogPort),
           executorBinlogServer)
-
+        //连接mysql注册binLog变化的各种事件：
         executorBinlogServer.connectMySQL(MySQLConnectionInfo(
           bingLogHost, bingLogPort,
           bingLogUserName, bingLogPassword,
@@ -226,7 +226,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
           Thread.sleep(1000)
         }
 
-        ExecutorBinlogServer(executorBinlogServer.host, executorBinlogServer.port)
+        ExecutorBinlogServerInfo(executorBinlogServer.host, executorBinlogServer.port)
       }.collect()
     }
 
@@ -239,7 +239,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
     }.start()
 
     var count = 60
-    var executorBinlogServer: ExecutorBinlogServer = null
+    var executorBinlogServer: ExecutorBinlogServerInfo = null
     while (executorBinlogServerInfoRef.get() == null) {
       Thread.sleep(1000)
       count -= 1
@@ -247,8 +247,9 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
     if (executorBinlogServerInfoRef.get() == null) {
       throw new RuntimeException("start BinLogSocketServerInExecutor fail")
     }
+    //获取到各executor端刚刚启动的BinLogSocketServerInExecutor的host/port后，作为参数，传给source，使其生成task后，到executor端能够和BinLogSocketServerInExecutor通信
     val report = executorBinlogServerInfoRef.get()
-    executorBinlogServer = ExecutorBinlogServer(report.host, report.port)
+    executorBinlogServer = ExecutorBinlogServerInfo(report.host, report.port)
     MLSQLBinLogSource(executorBinlogServer, sqlContext.sparkSession, metadataPath, finalStartingOffsets, parameters ++ Map("binlogServerId" -> binlogServerId))
   }
 
@@ -259,11 +260,11 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
  * This implementation will not work in production. We should do more thing on
  * something like fault recovery.
  *
- * @param executorBinlogServer
+ * @param executorBinlogServerInfo
  * @param spark
  * @param parameters
  */
-case class MLSQLBinLogSource(executorBinlogServer: ExecutorBinlogServer,
+case class MLSQLBinLogSource(executorBinlogServerInfo: ExecutorBinlogServerInfo,
                              spark: SparkSession,
                              metadataPath: String,
                              startingOffsets: Option[LongOffset],
@@ -283,7 +284,7 @@ case class MLSQLBinLogSource(executorBinlogServer: ExecutorBinlogServer,
   private var currentPartitionOffsets: Option[LongOffset] = None
 
   private def initialize(): Unit = synchronized {
-    socket = new Socket(executorBinlogServer.host, executorBinlogServer.port)
+    socket = new Socket(executorBinlogServerInfo.host, executorBinlogServerInfo.port)
     dIn = new DataInputStream(socket.getInputStream)
     dOut = new DataOutputStream(socket.getOutputStream)
   }
@@ -389,13 +390,13 @@ case class MLSQLBinLogSource(executorBinlogServer: ExecutorBinlogServer,
         Some(initialPartitionOffsets)
     }
 
-    val executorBinlogServerCopy = executorBinlogServer.copy()
+    val executorBinlogServerInfoCopy = executorBinlogServerInfo.copy()
 
     // Here we only use one partition to fetch data from binlog server.
     // The socket may be broken because we fetch all data in memory.
     // todo: optimize the way to fetch data
     val rdd = spark.sparkContext.parallelize(Seq("fetch-bing-log"), 1).mapPartitions { iter =>
-      val consumer = ExecutorBinlogServerConsumerCache.acquire(executorBinlogServerCopy)
+      val consumer = ExecutorBinlogServerConsumerCache.acquire(executorBinlogServerInfoCopy)
       consumer.fetchData(fromPartitionOffsets.get, untilPartitionOffsets.get)
     }.map { cr =>
       InternalRow(UTF8String.fromString(cr))
@@ -420,7 +421,7 @@ case class MLSQLBinLogSource(executorBinlogServer: ExecutorBinlogServer,
 }
 
 
-case class ExecutorInternalBinlogConsumer(executorBinlogServer: ExecutorBinlogServer) extends BinLogSocketServerSerDer {
+case class ExecutorInternalBinlogConsumer(executorBinlogServer: ExecutorBinlogServerInfo) extends BinLogSocketServerSerDer {
   val socket = new Socket(executorBinlogServer.host, executorBinlogServer.port)
   val dIn = new DataInputStream(socket.getInputStream)
   val dOut = new DataOutputStream(socket.getOutputStream)

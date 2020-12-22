@@ -16,18 +16,30 @@ object BinlogOffset {
     s"${prefix}.${"%06d".format(fileId)}"
   }
 
+  /**
+   * 根据binlog文件名和位置信息，拼装BinlogOffset
+   * @param filename
+   * @param pos
+   * @return
+   */
   def fromFileAndPos(filename: String, pos: Long) = {
     BinlogOffset(filename.split("\\.").last.toLong, pos)
   }
 }
 
+/**
+ * offset信息由binlog文件名和内容的位置信息构成
+ * @author jian.huang
+ * @version 4.2
+ * 2020-12-22 16:46:17
+ */
 case class BinlogOffset(fileId: Long, pos: Long) {
   def offset = (fileId.toString + "%013d".format(pos)).toLong
 }
 
-case class MySQLBinlogServer(host: String, port: Int)
+case class MySQLBinlogServerInfo(host: String, port: Int)
 
-case class ExecutorBinlogServer(host: String, port: Int)
+case class ExecutorBinlogServerInfo(host: String, port: Int)
 
 case class MySQLConnectionInfo(host: String, port: Int, userName: String, password: String,
                                binlogFileName: Option[String],

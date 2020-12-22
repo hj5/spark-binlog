@@ -512,13 +512,13 @@
     
     <property>
       <name>hive.security.authorization.enabled</name>
-      <value>true</value>
+      <value>false</value>
     </property>
     
-    <property>
-      <name>hive.security.authorization.manager</name>
-      <value>org.apache.ranger.authorization.hive.authorizer.RangerHiveAuthorizerFactory</value>
-    </property>
+<!--    <property>-->
+<!--      <name>hive.security.authorization.manager</name>-->
+<!--      <value>org.apache.ranger.authorization.hive.authorizer.RangerHiveAuthorizerFactory</value>-->
+<!--    </property>-->
     
     <property>
       <name>hive.security.authorization.sqlstd.confwhitelist.append</name>

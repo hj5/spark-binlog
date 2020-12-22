@@ -16,10 +16,10 @@ import tech.mlsql.common.utils.serder.json.JsonUtils
 
 object SocketServerInExecutor extends Logging {
 
-  private val binlogServerHolder = new java.util.concurrent.ConcurrentHashMap[MySQLBinlogServer, BinLogSocketServerInExecutor[_]]()
+  private val binlogServerHolder = new java.util.concurrent.ConcurrentHashMap[MySQLBinlogServerInfo, BinLogSocketServerInExecutor[_]]()
   val threadPool = Executors.newFixedThreadPool(100)
 
-  def addNewBinlogServer(a: MySQLBinlogServer, b: BinLogSocketServerInExecutor[_]) = {
+  def addNewBinlogServer(a: MySQLBinlogServerInfo, b: BinLogSocketServerInExecutor[_]) = {
     binlogServerHolder.put(a, b)
   }
 
@@ -130,7 +130,14 @@ abstract class SocketServerInExecutor[T](taskContextRef: AtomicReference[T], thr
     close
   })
 
-  def handleConnection(sock: Socket): Unit
+  /**
+   * binlogServer serverSocket的主体代码（线程的启动在servers.scala中）
+   * 由spark source接口方法触发，方法体会将binlogServer搜集的所有binlog变化json（由binLog变化事件转化而来）
+   * 发送给spark source接口方法，供其生成dataframe、offset
+   * clientSocket入口：{@link BinLogSocketServerSerDer.sendRequest }
+   * @param socket
+   */
+  def handleConnection(socket: Socket): Unit
 
   def close: Unit
 }
@@ -145,6 +152,11 @@ trait BinLogSocketServerSerDer {
     response
   }
 
+  /**
+   * MLSQLBinLogSource向binlogServer获取数据的请求发送出口（在spark source的接口方法中被调用）
+   * @param dOut
+   * @param request
+   */
   def sendRequest(dOut: DataOutputStream, request: Request) = {
     val bytes = request.json.getBytes(StandardCharsets.UTF_8)
     dOut.writeInt(bytes.length)
@@ -167,11 +179,22 @@ trait BinLogSocketServerSerDer {
     response
   }
 
+  /**
+   * BinLogSocketServerInExecutor 进行请求响应时，向client发送数据的『开始』、『结束』标识
+   * @param dOut
+   * @param mark
+   */
   def sendMark(dOut: DataOutputStream, mark:Int): Unit = {
     dOut.writeInt(mark)
     dOut.flush()
   }
 
+  /**
+   * BinLogSocketServerInExecutor 向client迭代发送真正的binlog数据
+   * 是发送『开始』、『结束』标识之间的数据
+   * @param dOut
+   * @param response
+   */
   def iterativeSendData(dOut: DataOutputStream, response: Response) = {
     val bytes = response.json.getBytes(StandardCharsets.UTF_8)
     dOut.writeInt(bytes.length)
@@ -179,34 +202,42 @@ trait BinLogSocketServerSerDer {
     dOut.flush()
   }
 
+  /**
+   * 从{@link SocketServerInExecutor.handleConnection}读取封装好的binLog数据
+   * @param dIn
+   * @return
+   */
   def readIteratedResponse(dIn: DataInputStream): Iterator[Response] = {
 
     new Iterator[Response]() {
       private var dataOrMark = SocketReplyMark.HEAD
       private var nextObj: Response = _
       private var eos = false
-      override def hasNext: Boolean = nextObj != null || {
-        if ( !eos ) {
-          dataOrMark = dIn.readInt
-          def next(mark : Int) : Boolean = {
-            mark match {
-              case SocketReplyMark.END =>
-                eos = true // eos=true !!!
-                false  // 结束位
-              case SocketReplyMark.HEAD => // 开始位 需要继续读一位
-                dataOrMark = dIn.readInt // 长度位 or end
-                next(dataOrMark)
-              case _ =>
-                val bytes = new Array[Byte](dataOrMark)
-                dIn.readFully(bytes, 0, dataOrMark)
-                val response = JsonUtils.fromJson[BinlogSocketResponse](new String(bytes, StandardCharsets.UTF_8)).unwrap
-                nextObj = response
-                true
-            }
+      override def hasNext: Boolean = {
+        nextObj != null || {
+          if ( !eos ) {
+            dataOrMark = dIn.readInt
+            getNext(dataOrMark)
+          } else {
+            false
           }
-          next(dataOrMark)
-        } else {
-          false
+        }
+      }
+
+      def getNext(mark : Int) : Boolean = {
+        mark match {
+          case SocketReplyMark.END =>
+            eos = true // eos=true !!!
+            false  // 结束位
+          case SocketReplyMark.HEAD => // 开始位 需要继续读一位
+            dataOrMark = dIn.readInt // 长度位 or end
+            getNext(dataOrMark)
+          case _ =>
+            val bytes = new Array[Byte](dataOrMark)
+            dIn.readFully(bytes, 0, dataOrMark)
+            val response = JsonUtils.fromJson[BinlogSocketResponse](new String(bytes, StandardCharsets.UTF_8)).unwrap
+            nextObj = response
+            true
         }
       }
 
@@ -266,11 +297,11 @@ object ExecutorBinlogServerConsumerCache extends Logging {
     }
   }
 
-  def acquire(executorBinlogServer: ExecutorBinlogServer): ExecutorInternalBinlogConsumer = synchronized {
-    val key = new CacheKey(executorBinlogServer.host, executorBinlogServer.port)
+  def acquire(executorBinlogServerInfo: ExecutorBinlogServerInfo): ExecutorInternalBinlogConsumer = synchronized {
+    val key = new CacheKey(executorBinlogServerInfo.host, executorBinlogServerInfo.port)
     val existingInternalConsumer = cache.get(key)
 
-    lazy val newInternalConsumer = new ExecutorInternalBinlogConsumer(executorBinlogServer)
+    lazy val newInternalConsumer = new ExecutorInternalBinlogConsumer(executorBinlogServerInfo)
 
     if (existingInternalConsumer == null) {
       // If consumer is not already cached, then put a new in the cache and return it
