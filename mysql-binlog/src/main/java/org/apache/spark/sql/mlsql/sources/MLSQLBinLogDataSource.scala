@@ -45,11 +45,11 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
 
   /**
    * First, we will launch a task to
-   *    1. start binlog client and setup a queue (where we put the binlog event)
-   *    2. start a new socket the the executor where the task runs on, and return the connection message.
+   *       1. start binlog client and setup a queue (where we put the binlog event)
+   *       2. start a new socket the the executor where the task runs on, and return the connection message.
    * Second, Launch the MLSQLBinLogSource to consume the events:
-   *    3. MLSQLBinLogSource get the host/port message and connect it to fetch the data.
-   *    4. For now ,we will not support continue streaming.
+   *       3. MLSQLBinLogSource get the host/port message and connect it to fetch the data.
+   *       4. For now ,we will not support continue streaming.
    */
   override def createSource(sqlContext: SQLContext, metadataPath: String, schema: Option[StructType], providerName: String, parameters: Map[String, String]): Source = {
 
@@ -129,7 +129,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
       Option(LongOffset(getOffsetFromCk))
     } catch {
       case e: Exception =>
-        logError(e.getMessage, e)
+        logError("从checkpoint获取offset失败", e)
         None
     }
 
@@ -145,8 +145,8 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
     val executorBinlogServerInfoRef = new AtomicReference[ReportBinlogSocketServerHostAndPort]()
     val tempSocketServerInDriver = new TempSocketServerInDriver(executorBinlogServerInfoRef)
 
-    val tempSocketServerHost = tempSocketServerInDriver.host
-    val tempSocketServerPort = tempSocketServerInDriver.port
+    val tempSocketServerInDriverHost = tempSocketServerInDriver.host
+    val tempSocketServerInDriverPort = tempSocketServerInDriver.port
 
 
     val maxBinlogQueueSize = parameters.getOrElse("maxBinlogQueueSize", "500000").toLong
@@ -163,6 +163,10 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
     val binaryLogClientParameters = new CaseInsensitiveMap(parameters.filter(f => f._1.startsWith("binaryLogClient.".toLowerCase(Locale.ROOT))).
       map(f => (f._1.substring("binaryLogClient.".length), f._2)).toMap)
 
+    /**
+     * 启动executor端binlogServer守护线程
+     * @return 各executor端binlogServer的ip、port集合
+     */
     def launchBinlogServer = {
       spark.sparkContext.setJobGroup(binlogServerId, s"binlog server (${bingLogHost}:${bingLogPort})", true)
       spark.sparkContext.parallelize(Seq("launch-binlog-socket-server"), 1).map { item =>
@@ -206,7 +210,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
         })
 
 
-        val socket = new Socket(tempSocketServerHost, tempSocketServerPort)
+        val socket = new Socket(tempSocketServerInDriverHost, tempSocketServerInDriverPort)
         val dout = new DataOutputStream(socket.getOutputStream)
         BinLogSocketServerCommand.sendRequest(dout,
           ReportBinlogSocketServerHostAndPort(executorBinlogServer.host, executorBinlogServer.port))
@@ -220,7 +224,7 @@ class MLSQLBinLogDataSource extends StreamSourceProvider with DataSourceRegister
           bingLogHost, bingLogPort,
           bingLogUserName, bingLogPassword,
           binlogFilename, binlogPos,
-          databaseNamePattern, tableNamePattern, Option(binaryLogClientParameters)), async = true)
+          databaseNamePattern, tableNamePattern, Option(binaryLogClientParameters)), async = false)
 
         while (!TaskContext.get().isInterrupted() && !executorBinlogServer.isClosed) {
           Thread.sleep(1000)

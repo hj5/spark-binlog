@@ -122,6 +122,14 @@ object SocketServerInExecutor extends Logging {
   }
 }
 
+/**
+ * executor内部启动的binlogServer，作用如下：
+ * 1、接收mysql发送过来的binlog事件
+ * 2、作为socketServer端与client端（spark source接口方法）通信，提供source需要的offset、dataframe数据
+ * @author jian.huang
+ * @version 4.2
+ * 2020-12-22 17:18:38
+ */
 abstract class SocketServerInExecutor[T](taskContextRef: AtomicReference[T], threadName: String) {
 
   val (server, host, port) = SocketServerInExecutor.setupMultiConnectionServer(taskContextRef, threadName) { sock =>

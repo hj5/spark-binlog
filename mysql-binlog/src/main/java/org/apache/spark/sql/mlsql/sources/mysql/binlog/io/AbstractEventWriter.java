@@ -3,6 +3,7 @@ package org.apache.spark.sql.mlsql.sources.mysql.binlog.io;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import org.apache.spark.sql.mlsql.sources.mysql.binlog.RawBinlogEvent;
+import org.apache.spark.sql.mlsql.sources.mysql.binlog.TableInfo;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -16,34 +17,35 @@ public abstract class AbstractEventWriter {
     protected void startJson(StringWriter outputStream, RawBinlogEvent event) throws IOException {
         jsonGenerator = createJsonGenerator(outputStream);
         jsonGenerator.writeStartObject();
-        String eventType = event.getEventType();
-        if (eventType == null) {
-            jsonGenerator.writeNullField("type");
-        } else {
-            jsonGenerator.writeStringField("type", eventType);
+        writeJsonField("type",event.getEventType());
+        writeJsonField("timestamp",event.getTimestamp());
+        String bingLogFileName = event.getBinlogFilename();
+        if (bingLogFileName != null) {
+            String[] prefixAndIndex = bingLogFileName.split("\\.");
+            writeJsonField("bingLogNamePrefix",prefixAndIndex[0]);
+            if (prefixAndIndex.length == 2){
+                writeJsonField("binlogIndex",prefixAndIndex[1]);
+            }
         }
-        Long timestamp = event.getTimestamp();
-        if (timestamp == null) {
-            jsonGenerator.writeNullField("timestamp");
-        } else {
-            jsonGenerator.writeNumberField("timestamp", event.getTimestamp());
+        writeJsonField("binlogFileOffset",event.getPos());
+        TableInfo tableInfo = event.getTableInfo();
+        if (tableInfo != null) {
+            writeJsonField("databaseName",tableInfo.getDatabaseName());
+            writeJsonField("tableName",tableInfo.getTableName());
+            writeJsonField("schema",tableInfo.getSchema());
         }
+    }
 
-        if (event.getTableInfo() != null) {
-            String db = event.getTableInfo().getDatabaseName();
-            String tableName = event.getTableInfo().getTableName();
-            String schema = event.getTableInfo().getSchema();
-
-            jsonGenerator.writeStringField("databaseName", db);
-            jsonGenerator.writeStringField("tableName", tableName);
-            jsonGenerator.writeStringField("schema", schema);
+    private <T> void writeJsonField(String fieldName, T fieldValue) throws IOException {
+        if (fieldValue == null) {
+            jsonGenerator.writeNullField(fieldName);
         } else {
-            jsonGenerator.writeNullField("databaseName");
-            jsonGenerator.writeNullField("tableName");
-            jsonGenerator.writeNullField("schema");
+            if (fieldValue instanceof Long) {
+                jsonGenerator.writeNumberField(fieldName, (Long)fieldValue);
+            } else {
+                jsonGenerator.writeStringField(fieldName, (String)fieldValue);
+            }
         }
-
-
     }
 
     protected void endJson() throws IOException {

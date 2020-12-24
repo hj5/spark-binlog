@@ -23,14 +23,7 @@ import org.apache.spark.streaming.BinlogWriteAheadLog
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
-/**
- * executor内部启动的binlogServer，作用如下：
- * 1、接收mysql发送过来的binlog事件
- * 2、作为socketServer端与client端（spark source接口方法）通信，提供source需要的offset、dataframe数据
- * @author jian.huang
- * @version 4.2
- * 2020-12-22 17:18:38
- */
+
 class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
                                       checkpointDir: String,
                                       timezone: String,
@@ -43,16 +36,16 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
 
   private var binaryLogClient: BinaryLogClient = null
 
-  private var currentBinlogFile: String = null
+  @volatile private var currentBinlogFile: String = null
 
-  private var currentBinlogPosition: Long = 4
+  @volatile private var currentBinlogPosition: Long = 4
   @volatile private var currentBinlogPositionConsumeFlag: Boolean = false
-  private var nextBinlogPosition: Long = 4
+  @volatile private var nextBinlogPosition: Long = 4
 
   private val queue = new util.ArrayDeque[RawBinlogEvent]()
 
 
-  private val writeAheadLog = {
+  private val binlogWriteAheadLog = {
     val sparkEnv = SparkEnv.get
     val tmp = new BinlogWriteAheadLog(UUID.randomUUID().toString, sparkEnv.serializerManager, sparkEnv.conf, hadoopConf, checkpointDir)
     tmp.cleanupOldBlocks(System.currentTimeMillis(), true)
@@ -107,7 +100,7 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
         item = aheadLogBuffer.poll()
       }
       if (!buff.isEmpty) {
-        writeAheadLog.write(buff)
+        binlogWriteAheadLog.write(buff)
       }
     }
 
@@ -119,18 +112,16 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
     if (isWriteAheadStorage) {
       if (aheadLogBuffer.size >= 1000) {
         flushAheadLog
-        writeAheadLog.cleanupOldBlocks(System.currentTimeMillis() - 1000 * 60 * 60)
+        binlogWriteAheadLog.cleanupOldBlocks(System.currentTimeMillis() - 1000 * 60 * 60)
       }
-    }
-
-    if (isWriteAheadStorage) {
       aheadLogBuffer.offer(item)
     } else {
+      //todo 验证队列满了，断开binlogclient conn后，还能收到event吗？
       //队列满了，就断开binlog conn，暂停接收事件：
       if (currentQueueSize.get() > maxBinlogQueueSize && !markPause.get()) {
         pause
       } else if (currentQueueSize.get() < maxBinlogQueueSize / 2 && markPause.get()) {
-        //队列足够大，获取binlog conn，重新接收事件：
+        //队列有足够空间后，获取binlog conn，重新接收事件：
         resume
       }
       currentQueueSize.incrementAndGet()
@@ -319,7 +310,12 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
     BinlogOffset.fromFileAndPos(rawBinlogEvent.getBinlogFilename, rawBinlogEvent.getPos).offset
   }
 
-  def convertRawBinlogEventRecord(rawBinlogEvent: RawBinlogEvent) = {
+  /**
+   * 将从queue或wal中取出的RawBinlogEvent转化为json
+   * @param rawBinlogEvent
+   * @return
+   */
+  def convertRawBinlogEvent2json(rawBinlogEvent: RawBinlogEvent) = {
     val writer = rawBinlogEvent.getEventType() match {
       case "insert" => insertRowsWriter
       case "update" => updateRowsWriter
@@ -327,13 +323,6 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
     }
 
     val jsonList = writer.writeEvent(rawBinlogEvent)
-    //    try {
-    //
-    //    } catch {
-    //      case e: Exception =>
-    //        logError("", e)
-    //        new util.ArrayList[String]()
-    //    }
     jsonList
   }
 
@@ -404,7 +393,7 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
       })
 
       tryWithoutException(() => {
-        writeAheadLog.stop()
+        binlogWriteAheadLog.stop()
       })
 
 
@@ -449,12 +438,12 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
 
             if (isWriteAheadStorage) {
               sendMark(dOut, SocketReplyMark.HEAD) // 先发一个开始位
-              writeAheadLog.read((records) => {
+              binlogWriteAheadLog.read((records) => {
                 records.foreach { _record =>
                   val record = _record.asInstanceOf[RawBinlogEvent]
                   if (toOffset(record) >= start && toOffset(record) < end) {
                     //                    res ++= convertRawBinlogEventRecord(record).asScala
-                    iterativeSendData(dOut, DataResponse(convertRawBinlogEventRecord(record).asScala.toList))
+                    iterativeSendData(dOut, DataResponse(convertRawBinlogEvent2json(record).asScala.toList))
                   }
                 }
               })
@@ -463,7 +452,7 @@ class BinLogSocketServerInExecutor[T](taskContextRef: AtomicReference[T],
               sendMark(dOut, SocketReplyMark.HEAD)
               var item: RawBinlogEvent = queue.poll()
               while (item != null && toOffset(item) >= start && toOffset(item) < end) {
-                iterativeSendData(dOut, DataResponse(convertRawBinlogEventRecord(item).asScala.toList))
+                iterativeSendData(dOut, DataResponse(convertRawBinlogEvent2json(item).asScala.toList))
                 item = queue.poll()
                 currentQueueSize.decrementAndGet()
               }
